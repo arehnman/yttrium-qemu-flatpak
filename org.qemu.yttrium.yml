@@ -1,0 +1,115 @@
+app-id: org.qemu.yttrium
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: qemu-system-x86_64
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=all
+  - --filesystem=home
+  - --filesystem=/tmp
+  - --filesystem=/var
+  - --filesystem=/run/user/
+
+modules:
+  - name: python3-build-deps
+    buildsystem: simple
+    build-commands:
+      - python3 -m pip install --no-index --prefix=/app pyyaml-6.0.3-*.whl
+      - python3 -m pip install --no-index --prefix=/app pyparsing-3.2.5-*.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6
+      - type: file
+        url: https://files.pythonhosted.org/packages/py3/p/pyparsing/pyparsing-3.2.5-py3-none-any.whl
+        sha256: e38a4f02064cf41fe6593d328d0512495ad1f3d8a91c4f73fc401b3079a59a5e
+
+  - name: virglrenderer
+    buildsystem: meson
+    build-options:
+      env:
+        PYTHONPATH: /app/lib/python3.13/site-packages
+    config-opts:
+      - -Dbuildtype=debugoptimized
+      - -Db_ndebug=false
+      - -Dcheck-gl-errors=true
+      - -Dplatforms=egl,glx
+      - -Dtests=false
+      - -Dvenus=true
+      - -Dvulkan-dload=true
+#      - -Drender-server-worker=thread
+    sources:
+      - type: dir
+        path: ../virglrenderer
+        skip:
+          - .git
+          - build
+
+  # - name: dtc
+  #   buildsystem: meson
+  #   sources:
+  #     - type: archive
+  #       url: https://gitlab.com/qemu-project/dtc/-/archive/b6910bec11614980a21e46fbccc35934b671bd81/dtc-b6910bec11614980a21e46fbccc35934b671bd81.tar.gz
+  #       sha256: e115f987eec23a1ba25150a46ced1675de3716072d3b4905afb3a9cda0f007c7
+
+  - name: spice-protocol
+    buildsystem: meson
+    sources:
+      - type: archive
+        url: https://www.spice-space.org/download/releases/spice-protocol-0.14.5.tar.xz
+        sha256: baf58449f6e89d19f475899ad5fb9196fdc46c03cc53233f4e39cf2978f9cff7
+
+  - name: spice-server
+    buildsystem: meson
+    config-opts:
+      - -Dgstreamer=no
+      - -Dmanual=false
+      - -Dsmartcard=disabled
+      - -Dtests=false
+    sources:
+      - type: archive
+        url: https://www.spice-space.org/download/releases/spice-0.16.0.tar.bz2
+        sha256: 0a6ec9528f05371261bbb2d46ff35e7b5c45ff89bb975a99af95a5f20ff4717d
+
+  - name: qemu
+    buildsystem: simple
+    build-options:
+      env:
+        PKG_CONFIG_PATH: /app/lib/pkgconfig:/app/share/pkgconfig
+        LD_LIBRARY_PATH: /app/lib
+    build-commands:
+      - rm -rf build
+      - >-
+        ./configure
+        --prefix=/app
+        --libdir=/app/lib
+        --target-list=x86_64-softmmu
+        --enable-kvm
+        --enable-slirp
+        --disable-fdt
+        --enable-virglrenderer
+        --enable-opengl
+        --enable-gtk
+        --enable-spice
+        --enable-spice-protocol
+        --enable-pa
+        --audio-drv-list=pa
+        --disable-docs
+        --disable-werror
+        --disable-guest-agent
+        --disable-vte
+        --disable-sdl
+      - make -j${FLATPAK_BUILDER_N_JOBS}
+      - make install
+    sources:
+      - type: dir
+        path: ../qemu
+        skip:
+          - .git
+          - build
